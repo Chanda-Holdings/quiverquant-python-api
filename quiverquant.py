@@ -1,6 +1,7 @@
 import requests
 import json
 import pandas as pd
+import time
 
 class quiver:
     def __init__(self, token):
@@ -9,7 +10,7 @@ class quiver:
         'X-CSRFToken': 'TyTJwjuEC7VV7mOqZ622haRaaUr0x0Ng4nrwSRFKQs7vdoBcJlK9qjAS69ghzhFu',
         'Authorization': "Token "+self.token}
     
-    def congress_trading(self, ticker="", politician=False, recent=True):
+    def congress_trading(self, ticker="", politician=False, recent=True, page="", page_size=""):
         if recent:
             urlStart = 'https://api.quiverquant.com/beta/live/congresstrading'
         else:
@@ -19,15 +20,36 @@ class quiver:
             url = urlStart+"?representative="+ticker
             
         elif len(ticker)>0:
+            urlStart = 'https://api.quiverquant.com/beta/historical/congresstrading'
             url = urlStart+"/"+ticker
         else:
             url = urlStart
-        print(url)
-        r = requests.get(url, headers=self.headers)
-        j = json.loads(r.content)
-        df = pd.DataFrame(j)
+        
+        r = requests.get(url, headers=self.headers, params={"page": page, "page_size": page_size})
+
+        if ("QueuePool" in r.text or "Gateway" in r.text or "seconds" in r.text) and r.status_code != 200:
+            num_seconds = 1
+            if "seconds" in r.text:
+                num_seconds = int(r.text.split(" seconds")[0].split(" ")[-1])
+            print(f"Server overloaded. Sleeping for {num_seconds} seconds")
+            
+            time.sleep(num_seconds)
+            return self.congress_trading(ticker, politician, recent, page, page_size)
+        
+        try:
+            df = pd.DataFrame(json.loads(r.content))
+        except:
+            print(f"PAGE {page} ERROR")
+            print(r.text)
+            return pd.DataFrame()
+
+        if (len(df)==0) or (df.shape[0]==0):
+            print("No results found")
+            return df
+        
         df["ReportDate"] = pd.to_datetime(df["ReportDate"])
         df["TransactionDate"] = pd.to_datetime(df["TransactionDate"])
+
         return df
    
 
@@ -39,6 +61,9 @@ class quiver:
         r = requests.get(url, headers=self.headers)
         j = json.loads(r.content)
         df = pd.DataFrame(j)
+        if (len(df)==0) or (df.shape[0]==0):
+            print("No results found")
+            return df
         df["Date"] = pd.to_datetime(df["Date"])
         return df
 
@@ -50,6 +75,9 @@ class quiver:
         r = requests.get(url, headers=self.headers)
         j = json.loads(r.content)
         df = pd.DataFrame(j)
+        if (len(df)==0) or (df.shape[0]==0):
+            print("No results found")
+            return df
         df["Date"] = pd.to_datetime(df["Date"])
         return df    
     
@@ -67,14 +95,28 @@ class quiver:
             
         return df
     
-    def gov_contracts(self, ticker=""):
+    def gov_contracts(self, ticker="", page="", page_size=""):
         if len(ticker)>0:
             url = "https://api.quiverquant.com/beta/historical/govcontractsall/"+ticker
         else:
             url = "https://api.quiverquant.com/beta/live/govcontractsall"
 
-        r = requests.get(url, headers=self.headers)
-        df = pd.DataFrame(json.loads(r.content))
+        r = requests.get(url, headers=self.headers, params={"page": page, "page_size": page_size})
+        
+        if ("QueuePool" in r.text or "Gateway" in r.text) and r.status_code != 200:
+            print("server overloaded")
+            time.sleep(1)
+            return self.gov_contracts(ticker, page, page_size)
+        
+        try:
+            df = pd.DataFrame(json.loads(r.content))
+        except:
+            print(f"PAGE {page} ERROR")
+            return pd.DataFrame()
+
+        if (len(df)==0) or (df.shape[0]==0):
+            print("No results found")
+            return df
         return df
 
     
@@ -416,6 +458,3 @@ class quiver:
         df = pd.DataFrame(json.loads(r.content))
         df['Datetime'] = pd.to_datetime(df["Time"], unit='ms')
         return df 
-
-
-  
