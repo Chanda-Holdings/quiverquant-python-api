@@ -47,8 +47,9 @@ class quiver:
             print("No results found")
             return df
         
-        df["ReportDate"] = pd.to_datetime(df["ReportDate"])
-        df["TransactionDate"] = pd.to_datetime(df["TransactionDate"])
+        df["Filed"] = pd.to_datetime(df["Filed"])
+        df["Traded"] = pd.to_datetime(df["Traded"])
+        df["Trade_Size_USD"] = float(df["Trade_Size_USD"].str.replace(",", "").str.replace("$", ""))
 
         return df
    
