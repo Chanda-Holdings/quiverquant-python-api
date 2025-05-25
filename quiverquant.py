@@ -49,7 +49,7 @@ class quiver:
         
         df["Filed"] = pd.to_datetime(df["Filed"])
         df["Traded"] = pd.to_datetime(df["Traded"])
-        df["Trade_Size_USD"] = float(df["Trade_Size_USD"].str.replace(",", "").str.replace("$", ""))
+        df["Trade_Size_USD"] = df["Trade_Size_USD"].replace('[^0-9.]', '', regex=True).astype(float)
 
         return df
    
