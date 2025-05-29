@@ -49,6 +49,9 @@ class quiver:
         
         df["Filed"] = pd.to_datetime(df["Filed"])
         df["Traded"] = pd.to_datetime(df["Traded"])
+
+        df = df[df["Trade_Size_USD"].notna()]
+        df["Trade_Size_USD"] = df["Trade_Size_USD"].astype(str).apply(lambda x: x.split(' - ')[-1])
         df["Trade_Size_USD"] = df["Trade_Size_USD"].replace('[^0-9.]', '', regex=True).astype(float)
 
         return df
