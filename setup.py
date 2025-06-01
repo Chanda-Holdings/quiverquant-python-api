@@ -14,9 +14,16 @@ setuptools.setup(
     url="https://github.com/Quiver-Quantitative/python-api",
     py_modules = ["quiverquant"],
     install_requires=[
-   'pandas',
-   'requests'
-],
+       'pandas',
+       'requests'
+    ],
+    extras_require={
+        'dev': [
+            'pytest>=6.0.0',
+            'pytest-cov>=2.10.0',
+            'python-dotenv>=0.15.0',
+        ],
+    },
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",

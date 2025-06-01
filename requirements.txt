@@ -1,0 +1,5 @@
+pytest>=6.0.0
+pytest-cov>=2.10.0
+pandas
+python-dotenv==1.1.0
+requests==2.32.3

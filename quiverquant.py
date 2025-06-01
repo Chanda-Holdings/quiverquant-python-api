@@ -47,12 +47,48 @@ class quiver:
             print("No results found")
             return df
         
-        df["Filed"] = pd.to_datetime(df["Filed"])
-        df["Traded"] = pd.to_datetime(df["Traded"])
+        # Handle different API response structures
+        # New API uses "Traded" and "Filed" fields, old one used "TransactionDate" and "ReportDate"
+        if "Traded" in df.columns:
+            df["Traded"] = pd.to_datetime(df["Traded"])
+        if "Filed" in df.columns:
+            df["Filed"] = pd.to_datetime(df["Filed"])
+        elif "ReportDate" in df.columns:
+            df["ReportDate"] = pd.to_datetime(df["ReportDate"])
+        if "TransactionDate" in df.columns:
+            df["TransactionDate"] = pd.to_datetime(df["TransactionDate"])
 
-        df = df[df["Trade_Size_USD"].notna()]
-        df["Trade_Size_USD"] = df["Trade_Size_USD"].astype(str).apply(lambda x: x.split(' - ')[-1])
-        df["Trade_Size_USD"] = df["Trade_Size_USD"].replace('[^0-9.]', '', regex=True).astype(float)
+        # Process trade size if present
+        if "Trade_Size_USD" in df.columns and df["Trade_Size_USD"].notna().any():
+            df = df[df["Trade_Size_USD"].notna()]
+            df["Trade_Size_USD"] = df["Trade_Size_USD"].astype(str).apply(lambda x: x.split(' - ')[-1])
+            df["Trade_Size_USD"] = df["Trade_Size_USD"].replace('[^0-9.]', '', regex=True).astype(float)
+        elif "Amount" in df.columns and df["Amount"].notna().any():
+            df = df[df["Amount"].notna()]
+            # Handle Amount field if Trade_Size_USD is not present
+            if pd.api.types.is_numeric_dtype(df["Amount"]):
+                pass  # Already numeric
+            else:
+                try:
+                    df["Amount"] = df["Amount"].astype(float)
+                except:
+                    # Handle string ranges like in Trade_Size_USD
+                    df["Amount"] = df["Amount"].astype(str).apply(lambda x: x.split(' - ')[-1] if ' - ' in x else x)
+                    df["Amount"] = df["Amount"].replace('[^0-9.]', '', regex=True).astype(float)
+
+        # Apply pagination manually if page_size is provided
+        # This is needed because the API might not respect the page_size parameter
+        if page_size:
+            try:
+                page_size = int(page_size)
+                if page:
+                    page = int(page)
+                    start_idx = (page - 1) * page_size
+                    df = df.iloc[start_idx:start_idx + page_size].copy()
+                else:
+                    df = df.iloc[:page_size].copy()
+            except (ValueError, TypeError) as e:
+                print(f"Warning: Error applying pagination: {e}")
 
         return df
    
@@ -62,42 +98,63 @@ class quiver:
             url = "https://api.quiverquant.com/beta/historical/senatetrading/"+ticker
         else:
             url = "https://api.quiverquant.com/beta/live/senatetrading"
-        r = requests.get(url, headers=self.headers)
-        j = json.loads(r.content)
-        df = pd.DataFrame(j)
-        if (len(df)==0) or (df.shape[0]==0):
-            print("No results found")
+        
+        try:
+            r = requests.get(url, headers=self.headers)
+            j = json.loads(r.content)
+            df = pd.DataFrame(j)
+            if (len(df)==0) or (df.shape[0]==0):
+                print("No results found")
+                return df
+            if "Date" in df.columns:
+                df["Date"] = pd.to_datetime(df["Date"])
             return df
-        df["Date"] = pd.to_datetime(df["Date"])
-        return df
+        except Exception as e:
+            print(f"Error processing senate trading data: {e}")
+            return pd.DataFrame()
 
     def house_trading(self, ticker=""):
         if len(ticker)>0:
             url = "https://api.quiverquant.com/beta/historical/housetrading/"+ticker
         else:
             url = "https://api.quiverquant.com/beta/live/housetrading"
-        r = requests.get(url, headers=self.headers)
-        j = json.loads(r.content)
-        df = pd.DataFrame(j)
-        if (len(df)==0) or (df.shape[0]==0):
-            print("No results found")
+        
+        try:
+            r = requests.get(url, headers=self.headers)
+            j = json.loads(r.content)
+            df = pd.DataFrame(j)
+            if (len(df)==0) or (df.shape[0]==0):
+                print("No results found")
+                return df
+            if "Date" in df.columns:
+                df["Date"] = pd.to_datetime(df["Date"])
             return df
-        df["Date"] = pd.to_datetime(df["Date"])
-        return df    
+        except Exception as e:
+            print(f"Error processing house trading data: {e}")
+            return pd.DataFrame()    
     
     def offexchange(self, ticker=""):
         if len(ticker)>0:
             url = "https://api.quiverquant.com/beta/historical/offexchange/"+ticker
         else:
             url = "https://api.quiverquant.com/beta/live/offexchange"
-        r = requests.get(url, headers=self.headers)
-        j = json.loads(r.content)
-        df = pd.DataFrame(j)
         
-        if len(ticker)>0:
-            df["Date"] = pd.to_datetime(df["Date"])
+        try:
+            r = requests.get(url, headers=self.headers)
+            j = json.loads(r.content)
+            df = pd.DataFrame(j)
             
-        return df
+            if (len(df)==0) or (df.shape[0]==0):
+                print("No results found")
+                return df
+                
+            if len(ticker)>0 and "Date" in df.columns:
+                df["Date"] = pd.to_datetime(df["Date"])
+                
+            return df
+        except Exception as e:
+            print(f"Error processing offexchange data: {e}")
+            return pd.DataFrame()
     
     def gov_contracts(self, ticker="", page="", page_size=""):
         if len(ticker)>0:
@@ -121,6 +178,21 @@ class quiver:
         if (len(df)==0) or (df.shape[0]==0):
             print("No results found")
             return df
+            
+        # Apply pagination manually if page_size is provided
+        # This is needed because the API might not respect the page_size parameter
+        if page_size:
+            try:
+                page_size = int(page_size)
+                if page:
+                    page = int(page)
+                    start_idx = (page - 1) * page_size
+                    df = df.iloc[start_idx:start_idx + page_size].copy()
+                else:
+                    df = df.iloc[:page_size].copy()
+            except (ValueError, TypeError) as e:
+                print(f"Warning: Error applying pagination: {e}")
+                
         return df
 
     
@@ -131,9 +203,21 @@ class quiver:
             url = "https://api.quiverquant.com/beta/live/lobbying"
 
         r = requests.get(url, headers=self.headers)
-        df = pd.DataFrame(json.loads(r.content))
-        df["Date"] = pd.to_datetime(df["Date"])
-        return df
+        
+        try:
+            df = pd.DataFrame(json.loads(r.content))
+            
+            if (len(df)==0) or (df.shape[0]==0):
+                print("No results found")
+                return df
+                
+            if "Date" in df.columns:
+                df["Date"] = pd.to_datetime(df["Date"])
+            
+            return df
+        except Exception as e:
+            print(f"Error processing lobbying data: {e}")
+            return pd.DataFrame()
         
     def insiders(self, ticker=""):
         if len(ticker)>0:
@@ -141,11 +225,24 @@ class quiver:
         else:
             url = "https://api.quiverquant.com/beta/live/insiders"
          
-        print("Drawing from: ", url)
-        r = requests.get(url, headers=self.headers)
-        df = pd.DataFrame(json.loads(r.content))
-       # df["Date"] = pd.to_datetime(df["Date"])
-        return df     
+        try:
+            r = requests.get(url, headers=self.headers)
+            df = pd.DataFrame(json.loads(r.content))
+            
+            if (len(df)==0) or (df.shape[0]==0):
+                print("No results found")
+                return df
+                
+            # Handle date columns
+            if "Date" in df.columns:
+                df["Date"] = pd.to_datetime(df["Date"])
+            if "fileDate" in df.columns:
+                df["fileDate"] = pd.to_datetime(df["fileDate"])
+                
+            return df
+        except Exception as e:
+            print(f"Error processing insiders data: {e}")
+            return pd.DataFrame()     
             
             
             
@@ -155,13 +252,28 @@ class quiver:
         else:
             url = "https://api.quiverquant.com/beta/live/wikipedia"
 
-        r = requests.get(url, headers=self.headers)
-        
-        if r.text == '"Upgrade your subscription plan to access this dataset."':
-            raise NameError('Upgrade your subscription plan to access this dataset.')
+        try:
+            r = requests.get(url, headers=self.headers)
             
-        df = pd.DataFrame(json.loads(r.content))
-        return df
+            if r.text == '"Upgrade your subscription plan to access this dataset."':
+                raise NameError('Upgrade your subscription plan to access this dataset.')
+                
+            df = pd.DataFrame(json.loads(r.content))
+            
+            if (len(df)==0) or (df.shape[0]==0):
+                print("No results found")
+                return df
+                
+            # Handle date columns if present
+            if "Date" in df.columns:
+                df["Date"] = pd.to_datetime(df["Date"])
+                
+            return df
+        except Exception as e:
+            if "Upgrade your subscription" in str(e):
+                raise
+            print(f"Error processing Wikipedia data: {e}")
+            return pd.DataFrame()
     
     def wallstreetbets(self, ticker="",date_from = "", date_to = "", yesterday=False):
         if len(ticker)>0:
@@ -174,30 +286,44 @@ class quiver:
                 date_from = pd.to_datetime(date_from).strftime('%Y%m%d')
                 url = url+"&date_from="+date_from 
             if len(date_to)>0:
+                date_to = pd.to_datetime(date_to).strftime('%Y%m%d')
                 url = url+"&date_to="+date_to 
 
         if yesterday:
             url = "https://api.quiverquant.com/beta/live/wallstreetbets"
 
-        print(url)
-        r = requests.get(url, headers=self.headers)
+        try:
+            r = requests.get(url, headers=self.headers)
 
-        if r.text == '"Upgrade your subscription plan to access this dataset."':
-            raise NameError('Upgrade your subscription plan to access this dataset.')
+            if r.text == '"Upgrade your subscription plan to access this dataset."':
+                raise NameError('Upgrade your subscription plan to access this dataset.')
 
-        df = pd.DataFrame(json.loads(r.content))
+            df = pd.DataFrame(json.loads(r.content))
+            
+            if (len(df)==0) or (df.shape[0]==0):
+                print("No results found")
+                return df
 
-        if not yesterday:
-            try:
-                df["Date"] = pd.to_datetime(df["Time"], unit='ms')
-            except:
-                df["Date"] = pd.to_datetime(df["Date"]) 
-            if len(date_from)>0:
-                df = df[df["Date"]>=pd.to_datetime(date_from)]
-            if len(date_to)>0:
-                df = df[df["Date"]<=pd.to_datetime(date_to)]
+            if not yesterday:
+                try:
+                    if "Time" in df.columns:
+                        df["Date"] = pd.to_datetime(df["Time"], unit='ms')
+                    elif "Date" in df.columns:
+                        df["Date"] = pd.to_datetime(df["Date"])
+                        
+                    if len(date_from)>0:
+                        df = df[df["Date"]>=pd.to_datetime(date_from)]
+                    if len(date_to)>0:
+                        df = df[df["Date"]<=pd.to_datetime(date_to)]
+                except Exception as e:
+                    print(f"Error processing date data: {e}")
 
-        return df 
+            return df
+        except Exception as e:
+            if "Upgrade your subscription" in str(e):
+                raise
+            print(f"Error processing WallStreetBets data: {e}")
+            return pd.DataFrame() 
     
     def twitter(self, ticker = ""):
         if len(ticker)>0:
@@ -205,13 +331,28 @@ class quiver:
         else:
             url = "https://api.quiverquant.com/beta/live/twitter"
 
-        r = requests.get(url, headers=self.headers)
-        
-        if r.text == '"Upgrade your subscription plan to access this dataset."':
-            raise NameError('Upgrade your subscription plan to access this dataset.')
+        try:
+            r = requests.get(url, headers=self.headers)
             
-        df = pd.DataFrame(json.loads(r.content))
-        return df 
+            if r.text == '"Upgrade your subscription plan to access this dataset."':
+                raise NameError('Upgrade your subscription plan to access this dataset.')
+                
+            df = pd.DataFrame(json.loads(r.content))
+            
+            if (len(df)==0) or (df.shape[0]==0):
+                print("No results found")
+                return df
+                
+            # Handle date columns if present
+            if "Date" in df.columns:
+                df["Date"] = pd.to_datetime(df["Date"])
+                
+            return df
+        except Exception as e:
+            if "Upgrade your subscription" in str(e):
+                raise
+            print(f"Error processing Twitter data: {e}")
+            return pd.DataFrame() 
     
     def spacs(self, ticker = ""):
         if len(ticker)>0:
@@ -219,13 +360,28 @@ class quiver:
         else:
             url = "https://api.quiverquant.com/beta/live/spacs"
 
-        r = requests.get(url, headers=self.headers)
-        
-        if r.text == '"Upgrade your subscription plan to access this dataset."':
-            raise NameError('Upgrade your subscription plan to access this dataset.')
+        try:
+            r = requests.get(url, headers=self.headers)
             
-        df = pd.DataFrame(json.loads(r.content))
-        return df 
+            if r.text == '"Upgrade your subscription plan to access this dataset."':
+                raise NameError('Upgrade your subscription plan to access this dataset.')
+                
+            df = pd.DataFrame(json.loads(r.content))
+            
+            if (len(df)==0) or (df.shape[0]==0):
+                print("No results found")
+                return df
+                
+            # Handle date columns if present
+            if "Date" in df.columns:
+                df["Date"] = pd.to_datetime(df["Date"])
+                
+            return df
+        except Exception as e:
+            if "Upgrade your subscription" in str(e):
+                raise
+            print(f"Error processing SPACs data: {e}")
+            return pd.DataFrame() 
     
     def flights(self, ticker = ""):
         if len(ticker)>0:
@@ -233,13 +389,30 @@ class quiver:
         else:
             url = "https://api.quiverquant.com/beta/live/flights"
 
-        r = requests.get(url, headers=self.headers)
-        
-        if r.text == '"Upgrade your subscription plan to access this dataset."':
-            raise NameError('Upgrade your subscription plan to access this dataset.')
+        try:
+            r = requests.get(url, headers=self.headers)
             
-        df = pd.DataFrame(json.loads(r.content))
-        return df 
+            if r.text == '"Upgrade your subscription plan to access this dataset."':
+                raise NameError('Upgrade your subscription plan to access this dataset.')
+                
+            df = pd.DataFrame(json.loads(r.content))
+            
+            if (len(df)==0) or (df.shape[0]==0):
+                print("No results found")
+                return df
+                
+            # Handle date columns if present
+            if "Date" in df.columns:
+                df["Date"] = pd.to_datetime(df["Date"])
+            if "FlightDate" in df.columns:
+                df["FlightDate"] = pd.to_datetime(df["FlightDate"])
+                
+            return df
+        except Exception as e:
+            if "Upgrade your subscription" in str(e):
+                raise
+            print(f"Error processing flights data: {e}")
+            return pd.DataFrame() 
         
         
     def political_beta(self, ticker = ""):
@@ -248,10 +421,28 @@ class quiver:
         else:
             url = "https://api.quiverquant.com/beta/live/politicalbeta"
 
-        r = requests.get(url, headers=self.headers)
-        
-        if r.text == '"Upgrade your subscription plan to access this dataset."':
-            raise NameError('Upgrade your subscription plan to access this dataset.')
+        try:
+            r = requests.get(url, headers=self.headers)
+            
+            if r.text == '"Upgrade your subscription plan to access this dataset."':
+                raise NameError('Upgrade your subscription plan to access this dataset.')
+                
+            df = pd.DataFrame(json.loads(r.content))
+            
+            if (len(df)==0) or (df.shape[0]==0):
+                print("No results found")
+                return df
+                
+            # Handle date columns if present
+            if "Date" in df.columns:
+                df["Date"] = pd.to_datetime(df["Date"])
+                
+            return df
+        except Exception as e:
+            if "Upgrade your subscription" in str(e):
+                raise
+            print(f"Error processing political beta data: {e}")
+            return pd.DataFrame()
             
         df = pd.DataFrame(json.loads(r.content))
         return df 
