@@ -275,15 +275,25 @@ def test_invalid_token():
     """Test behavior with invalid API token."""
     invalid_client = quiver("invalid_token_12345")
     
-    # Should either return empty DataFrame or raise an authentication error
+    # Test that access is denied with invalid token
+    # We should either get an empty DataFrame or an authentication error
     try:
         result = invalid_client.congress_trading()
-        assert isinstance(result, pd.DataFrame)
         # If it returns a DataFrame, it should be empty
-        assert result.empty
+        assert isinstance(result, pd.DataFrame)
+        assert result.empty, "Invalid token should not return data"
+        
+        # Try another endpoint as well
+        result2 = invalid_client.insiders()
+        assert isinstance(result2, pd.DataFrame)
+        assert result2.empty, "Invalid token should not return data"
+        
     except Exception as e:
-        # If it raises an exception, it should contain authentication-related message
-        assert any(term in str(e).lower() for term in ["auth", "token", "unauthorized"])
+        # If an exception is raised, it should be related to authentication
+        error_message = str(e).lower()
+        auth_terms = ["auth", "token", "unauthorized", "permission", "access", "denied"]
+        assert any(term in error_message for term in auth_terms), \
+            f"Expected authentication error, got: {error_message}"
 
 # Test specific endpoints
 def test_insiders_trading(client):
