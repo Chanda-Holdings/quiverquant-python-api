@@ -15,7 +15,7 @@ This package allows you to access several alternative data sources which are upd
 
 This data can be used for backtesting and implementing trading strategies.
 
-[![Daily API Integration Tests](https://github.com/YOUR_USERNAME/quiverquant-python-api/actions/workflows/daily-tests.yml/badge.svg)](https://github.com/YOUR_USERNAME/quiverquant-python-api/actions/workflows/daily-tests.yml)
+[![Daily API Integration Tests](https://github.com/Chanda-Holdings/quiverquant-python-api/actions/workflows/daily-tests.yml/badge.svg)](https://github.com/Chanda-Holdings/quiverquant-python-api/actions/workflows/daily-tests.yml)
 
 ### Receiving API Token
 You can sign up for a Quiver API token [here](https://api.quiverquant.com). 
