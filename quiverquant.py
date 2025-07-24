@@ -54,6 +54,14 @@ class quiver:
         df = pd.concat(array_of_dataframes, ignore_index=True)
         df = df[df["Traded"] >= pd.to_datetime(from_date).tz_localize(None)]
 
+        if "Filed" in df.columns:
+            df["Filed"] = pd.to_datetime(df["Filed"])
+
+        numeric_cols = ["Trade_Size_USD", "Amount", "Value"]
+        for col in numeric_cols:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+
         return df
 
     def senate_trading(self, ticker=""):
