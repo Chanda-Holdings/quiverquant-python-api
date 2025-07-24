@@ -12,16 +12,13 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/Quiver-Quantitative/python-api",
-    py_modules = ["quiverquant"],
-    install_requires=[
-       'pandas',
-       'requests'
-    ],
+    py_modules=["quiverquant"],
+    install_requires=["pandas", "requests"],
     extras_require={
-        'dev': [
-            'pytest>=6.0.0',
-            'pytest-cov>=2.10.0',
-            'python-dotenv>=0.15.0',
+        "dev": [
+            "pytest>=6.0.0",
+            "pytest-cov>=2.10.0",
+            "python-dotenv>=0.15.0",
         ],
     },
     classifiers=[
@@ -29,5 +26,5 @@ setuptools.setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    python_requires='>=3.6',
+    python_requires=">=3.6",
 )
