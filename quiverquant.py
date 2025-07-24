@@ -10,90 +10,65 @@ class quiver:
         'X-CSRFToken': 'TyTJwjuEC7VV7mOqZ622haRaaUr0x0Ng4nrwSRFKQs7vdoBcJlK9qjAS69ghzhFu',
         'Authorization': "Token "+self.token}
     
-    def congress_trading(self, ticker="", politician=False, recent=True, page="", page_size=""):
-        if recent:
-            urlStart = 'https://api.quiverquant.com/beta/live/congresstrading'
-        else:
-            urlStart = 'https://api.quiverquant.com/beta/bulk/congresstrading'
-        if politician:
-            ticker = ticker.replace(" ", "%20")
-            url = urlStart+"?representative="+ticker
-            
-        elif len(ticker)>0:
-            urlStart = 'https://api.quiverquant.com/beta/historical/congresstrading'
-            url = urlStart+"/"+ticker
-        else:
-            url = urlStart
-        
-        r = requests.get(url, headers=self.headers, params={"page": page, "page_size": page_size})
+    def congress_trading(self, from_date):
+        url = 'https://api.quiverquant.com/beta/bulk/congresstrading'
 
-        if ("QueuePool" in r.text or "Gateway" in r.text or "seconds" in r.text) and r.status_code != 200:
-            num_seconds = 1
-            if "seconds" in r.text:
-                num_seconds = int(r.text.split(" seconds")[0].split(" ")[-1])
-            print(f"Server overloaded. Sleeping for {num_seconds} seconds")
-            
-            time.sleep(num_seconds)
-            return self.congress_trading(ticker, politician, recent, page, page_size)
-        
-        try:
-            df = pd.DataFrame(json.loads(r.content))
-        except:
-            print(f"PAGE {page} ERROR")
-            print(r.text)
-            return pd.DataFrame()
+        array_of_dataframes = []
+        page = 1
+        while True:
+            r = requests.get(url, headers=self.headers, params={"page": page, "page_size": 1000})
+            if ("QueuePool" in r.text or "Gateway" in r.text or "seconds" in r.text) and r.status_code != 200:
+                num_seconds = 1
+                if "seconds" in r.text:
+                    num_seconds = int(r.text.split(" seconds")[0].split(" ")[-1])
+                print(f"Server overloaded. Sleeping for {num_seconds} seconds")
+                
+                time.sleep(num_seconds)
+                continue
 
-        if (len(df)==0) or (df.shape[0]==0):
-            print("No results found")
-            return df
-        
-        # Handle different API response structures
-        # New API uses "Traded" and "Filed" fields, old one used "TransactionDate" and "ReportDate"
-        if "Traded" in df.columns:
-            df["Traded"] = pd.to_datetime(df["Traded"])
-        if "Filed" in df.columns:
-            df["Filed"] = pd.to_datetime(df["Filed"])
-        elif "ReportDate" in df.columns:
-            df["ReportDate"] = pd.to_datetime(df["ReportDate"])
-        if "TransactionDate" in df.columns:
-            df["TransactionDate"] = pd.to_datetime(df["TransactionDate"])
-
-        # Process trade size if present
-        if "Trade_Size_USD" in df.columns and df["Trade_Size_USD"].notna().any():
-            df = df[df["Trade_Size_USD"].notna()]
-            df["Trade_Size_USD"] = df["Trade_Size_USD"].astype(str).apply(lambda x: x.split(' - ')[-1])
-            df["Trade_Size_USD"] = df["Trade_Size_USD"].replace('[^0-9.]', '', regex=True).astype(float)
-        elif "Amount" in df.columns and df["Amount"].notna().any():
-            df = df[df["Amount"].notna()]
-            # Handle Amount field if Trade_Size_USD is not present
-            if pd.api.types.is_numeric_dtype(df["Amount"]):
-                pass  # Already numeric
-            else:
-                try:
-                    df["Amount"] = df["Amount"].astype(float)
-                except:
-                    # Handle string ranges like in Trade_Size_USD
-                    df["Amount"] = df["Amount"].astype(str).apply(lambda x: x.split(' - ')[-1] if ' - ' in x else x)
-                    df["Amount"] = df["Amount"].replace('[^0-9.]', '', regex=True).astype(float)
-
-        # Apply pagination manually if page_size is provided
-        # This is needed because the API might not respect the page_size parameter
-        if page_size:
             try:
-                page_size = int(page_size)
-                if page:
-                    page = int(page)
-                    start_idx = (page - 1) * page_size
-                    df = df.iloc[start_idx:start_idx + page_size].copy()
-                else:
-                    df = df.iloc[:page_size].copy()
-            except (ValueError, TypeError) as e:
-                print(f"Warning: Error applying pagination: {e}")
+                dataframe = pd.DataFrame(json.loads(r.content))
+            except:
+                print(f"PAGE {page} ERROR")
+                print(r.text)
+                raise
+            
+            if len(dataframe)==0 or dataframe.shape[0]==0:
+                break
+
+            array_of_dataframes.append(dataframe)
+            page += 1
+
+            dataframe["Traded"] = pd.to_datetime(dataframe["Traded"])
+            if dataframe["Traded"].min() < pd.to_datetime(from_date).tz_localize(None):
+                break
+
+        df = pd.concat(array_of_dataframes, ignore_index=True)
+        df = df[df["Traded"] >= pd.to_datetime(from_date).tz_localize(None)]
 
         return df
-   
 
     def senate_trading(self, ticker=""):
+        if len(ticker)>0:
+            url = "https://api.quiverquant.com/beta/historical/senatetrading/"+ticker
+        else:
+            url = "https://api.quiverquant.com/beta/live/senatetrading"
+        
+        try:
+            r = requests.get(url, headers=self.headers)
+            j = json.loads(r.content)
+            df = pd.DataFrame(j)
+            if (len(df)==0) or (df.shape[0]==0):
+                print("No results found")
+                return df
+            if "Date" in df.columns:
+                df["Date"] = pd.to_datetime(df["Date"])
+            return df
+        except Exception as e:
+            print(f"Error processing senate trading data: {e}")
+            return pd.DataFrame()
+            
+    def senate_trading_old(self, ticker=""):
         if len(ticker)>0:
             url = "https://api.quiverquant.com/beta/historical/senatetrading/"+ticker
         else:
@@ -156,45 +131,45 @@ class quiver:
             print(f"Error processing offexchange data: {e}")
             return pd.DataFrame()
     
-    def gov_contracts(self, ticker="", page="", page_size=""):
-        if len(ticker)>0:
-            url = "https://api.quiverquant.com/beta/historical/govcontractsall/"+ticker
-        else:
-            url = "https://api.quiverquant.com/beta/live/govcontractsall"
 
-        r = requests.get(url, headers=self.headers, params={"page": page, "page_size": page_size})
+    def gov_contracts(self, from_date):
+        url = "https://api.quiverquant.com/beta/live/govcontractsall"
         
-        if ("QueuePool" in r.text or "Gateway" in r.text) and r.status_code != 200:
-            print("server overloaded")
-            time.sleep(1)
-            return self.gov_contracts(ticker, page, page_size)
-        
-        try:
-            df = pd.DataFrame(json.loads(r.content))
-        except:
-            print(f"PAGE {page} ERROR")
-            return pd.DataFrame()
-
-        if (len(df)==0) or (df.shape[0]==0):
-            print("No results found")
-            return df
+        array_of_dataframes = []
+        page = 1
+        while True:
+            r = requests.get(url, headers=self.headers, params={"page": page, "page_size": 1000})
             
-        # Apply pagination manually if page_size is provided
-        # This is needed because the API might not respect the page_size parameter
-        if page_size:
-            try:
-                page_size = int(page_size)
-                if page:
-                    page = int(page)
-                    start_idx = (page - 1) * page_size
-                    df = df.iloc[start_idx:start_idx + page_size].copy()
-                else:
-                    df = df.iloc[:page_size].copy()
-            except (ValueError, TypeError) as e:
-                print(f"Warning: Error applying pagination: {e}")
+            if ("QueuePool" in r.text or "Gateway" in r.text or "seconds" in r.text) and r.status_code != 200:
+                num_seconds = 1
+                if "seconds" in r.text:
+                    num_seconds = int(r.text.split(" seconds")[0].split(" ")[-1])
+                print(f"Server overloaded. Sleeping for {num_seconds} seconds")
                 
-        return df
+                time.sleep(num_seconds)
+                continue
 
+            try:
+                dataframe = pd.DataFrame(json.loads(r.content))
+            except:
+                print(f"PAGE {page} ERROR")
+                print(r.text)
+                raise
+
+            if len(dataframe)==0 or dataframe.shape[0]==0:
+                break
+                
+            array_of_dataframes.append(dataframe)
+            page += 1
+
+            dataframe["Date"] = pd.to_datetime(dataframe["Date"])
+            if dataframe["Date"].min() < pd.to_datetime(from_date).tz_localize(None):
+                break
+            
+        df = pd.concat(array_of_dataframes, ignore_index=True)
+        df = df[df["Date"] >= pd.to_datetime(from_date).tz_localize(None)]
+
+        return df
     
     def lobbying(self, ticker=""):
         if len(ticker)>0:
@@ -275,7 +250,7 @@ class quiver:
             print(f"Error processing Wikipedia data: {e}")
             return pd.DataFrame()
     
-    def wallstreetbets(self, ticker="",date_from = "", date_to = "", yesterday=False):
+    def wallstreetbets(self, ticker="", date_from = "", date_to = "", yesterday=False):
         if len(ticker)>0:
             url = "https://api.quiverquant.com/beta/historical/wallstreetbets/"+ticker
 
@@ -652,4 +627,4 @@ class quiver:
 
         df = pd.DataFrame(json.loads(r.content))
         df['Datetime'] = pd.to_datetime(df["Time"], unit='ms')
-        return df 
+        return df
