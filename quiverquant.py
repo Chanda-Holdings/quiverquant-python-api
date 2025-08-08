@@ -21,7 +21,9 @@ class quiver:
         page = 1
         while True:
             r = requests.get(
-                url, headers=self.headers, params={"page": page, "page_size": 1000, "version": "V2"}
+                url,
+                headers=self.headers,
+                params={"page": page, "page_size": 1000, "version": "V2"},
             )
             if (
                 "QueuePool" in r.text or "Gateway" in r.text or "seconds" in r.text
