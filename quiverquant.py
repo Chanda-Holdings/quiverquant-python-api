@@ -49,22 +49,46 @@ class quiver:
             array_of_dataframes.append(dataframe)
             page += 1
 
-            dataframe["Traded"] = pd.to_datetime(dataframe["Traded"])
-            if dataframe["Traded"].min() < pd.to_datetime(from_date).tz_localize(None):
+            dataframe["Quiver_Upload_Time"] = pd.to_datetime(
+                dataframe["Quiver_Upload_Time"]
+            )
+            if dataframe["Quiver_Upload_Time"].min() < pd.to_datetime(
+                from_date
+            ).tz_localize(None):
                 break
 
         df = pd.concat(array_of_dataframes, ignore_index=True)
+        df["Traded"] = pd.to_datetime(df["Traded"])
+        df["last_modified"] = pd.to_datetime(df["last_modified"])
+        df["Quiver_Upload_Time"] = pd.to_datetime(df["Quiver_Upload_Time"])
+        df["Filed"] = pd.to_datetime(df["Filed"])
+
         df = df[df["Traded"] >= pd.to_datetime(from_date).tz_localize(None)]
-
-        if "Filed" in df.columns:
-            df["Filed"] = pd.to_datetime(df["Filed"])
-
-        numeric_cols = ["Trade_Size_USD", "Amount", "Value"]
-        for col in numeric_cols:
-            if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors="coerce")
+        df["Trade_Size_USD"] = df["Trade_Size_USD"].apply(
+            self._normalize_Trade_Size_USD
+        )
 
         return df
+
+    @staticmethod
+    def _normalize_Trade_Size_USD(value):
+        if isinstance(value, str):
+            if value.lower().startswith("over "):
+                value = value[5:].strip()
+
+            value = value.replace("$", "").replace(",", "").strip()
+            if "-" in value:
+                parts = value.split("-")
+                try:
+                    return (float(parts[0]) + float(parts[1])) / 2
+                except ValueError:
+                    return None
+
+            try:
+                return float(value)
+            except ValueError:
+                return None
+        return value
 
     def senate_trading(self, ticker=""):
         if len(ticker) > 0:
